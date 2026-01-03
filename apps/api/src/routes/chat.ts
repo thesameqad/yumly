@@ -82,7 +82,7 @@ router.post("/chat", async (req: Request, res: Response) => {
         // Search for places - use location name if provided, otherwise user coordinates
         const searchTerm = yelpService.buildSearchTerm(intent.entities);
         const searchResults = await yelpService.searchPlaces(
-          locationName ? null : (userLocation ?? null),
+          locationName ? null : userLocation ?? null,
           {
             term: searchTerm,
             filters: intent.entities.filters,
