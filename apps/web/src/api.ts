@@ -5,10 +5,10 @@ import type {
   ChatMessage,
 } from "@yumly/shared";
 
-const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_URL || "";
 
 export async function sendMessage(request: ChatRequest): Promise<ChatResponse> {
-  const response = await fetch(`${API_BASE}/chat`, {
+  const response = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
@@ -22,7 +22,7 @@ export async function sendMessage(request: ChatRequest): Promise<ChatResponse> {
 }
 
 export async function getSession(userId: string): Promise<UserSession | null> {
-  const response = await fetch(`${API_BASE}/session/${userId}`);
+  const response = await fetch(`${API_BASE}/api/session/${userId}`);
 
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`API error: ${response.status}`);
@@ -34,7 +34,7 @@ export async function getChatHistory(
   userId: string,
   limit = 50
 ): Promise<ChatMessage[]> {
-  const response = await fetch(`${API_BASE}/history/${userId}?limit=${limit}`);
+  const response = await fetch(`${API_BASE}/api/history/${userId}?limit=${limit}`);
 
   if (!response.ok) throw new Error(`API error: ${response.status}`);
 
@@ -43,7 +43,7 @@ export async function getChatHistory(
 }
 
 export async function clearChatHistory(userId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/history/${userId}`, {
+  const response = await fetch(`${API_BASE}/api/history/${userId}`, {
     method: "DELETE",
   });
 
@@ -54,7 +54,7 @@ export async function updateLocation(
   userId: string,
   location: { latitude: number; longitude: number }
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/location`, {
+  const response = await fetch(`${API_BASE}/api/location`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ userId, location }),
