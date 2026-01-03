@@ -3,6 +3,7 @@ import type { UserLocation } from "@yumly/shared";
 
 interface Props {
   location: UserLocation | null;
+  cityName: string | null;
   loading: boolean;
   error: string | null;
   onRequestLocation: () => void;
@@ -10,27 +11,35 @@ interface Props {
 
 export function LocationButton({
   location,
+  cityName,
   loading,
   error,
   onRequestLocation,
 }: Props) {
   const hasLocation = !!location;
 
+  // Display text: city name if available, otherwise "Location set" or "Set location"
+  const displayText = loading
+    ? "Getting location..."
+    : hasLocation
+    ? cityName || "Location set"
+    : "Set location";
+
   return (
     <div className="flex items-center gap-2">
       <button
         onClick={onRequestLocation}
         disabled={loading}
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+        className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all shadow-sm ${
           hasLocation
-            ? "bg-green-100 text-green-700 hover:bg-green-200"
+            ? "bg-secondary-100 text-secondary-700 hover:bg-secondary-200 border border-secondary-200"
             : error
-            ? "bg-red-100 text-red-700 hover:bg-red-200"
-            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+            : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200 hover:border-gray-300"
         }`}
         title={
           hasLocation
-            ? `Location set (${location.latitude.toFixed(
+            ? `${cityName || "Location set"} (${location.latitude.toFixed(
                 4
               )}, ${location.longitude.toFixed(4)})`
             : error || "Click to share your location"
@@ -67,7 +76,7 @@ export function LocationButton({
             />
           </svg>
         )}
-        <span>{hasLocation ? "Location set" : "Set location"}</span>
+        <span>{displayText}</span>
       </button>
 
       {error && <span className="text-xs text-red-600">{error}</span>}

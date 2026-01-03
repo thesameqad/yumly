@@ -9,7 +9,10 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:3001",
         changeOrigin: true,
+        secure: false,
       },
     },
   },
+  // Ensure SPA fallback doesn't interfere with API routes
+  appType: "spa",
 });

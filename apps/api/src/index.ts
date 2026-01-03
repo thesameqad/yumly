@@ -3,6 +3,14 @@ import express from "express";
 import cors from "cors";
 import chatRoutes from "./routes/chat.js";
 
+// Debug: Check if API key is loaded
+console.log(
+  "OPENROUTER_API_KEY:",
+  process.env.OPENROUTER_API_KEY
+    ? `SET (${process.env.OPENROUTER_API_KEY.substring(0, 15)}...)`
+    : "NOT SET"
+);
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 

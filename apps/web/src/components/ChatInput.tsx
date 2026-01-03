@@ -29,7 +29,7 @@ export function ChatInput({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 p-4 border-t bg-white">
+    <form onSubmit={handleSubmit} className="flex gap-2 w-full">
       <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
@@ -37,13 +37,13 @@ export function ChatInput({
         placeholder={placeholder}
         disabled={disabled}
         rows={1}
-        className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yum-500 focus:border-transparent disabled:bg-gray-100"
+        className="flex-1 resize-none rounded-xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yum-500 focus:border-transparent disabled:bg-gray-50 shadow-sm text-gray-900 placeholder:text-gray-400"
         style={{ maxHeight: "120px" }}
       />
       <button
         type="submit"
         disabled={disabled || !input.trim()}
-        className="px-6 py-3 bg-yum-500 text-white rounded-xl font-medium hover:bg-yum-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+        className="px-4 py-2 bg-gradient-to-br from-yum-500 to-yum-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-yum-200 disabled:shadow-none disabled:bg-none disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-all flex items-center justify-center min-w-[50px]"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

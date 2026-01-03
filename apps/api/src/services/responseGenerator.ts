@@ -116,8 +116,11 @@ Keep it short and helpful.`,
   private formatPlacesForLLM(places: RankedPlace[]): string {
     return places
       .map((place, i) => {
-        const distance = place.distance
-          ? `${Math.round(place.distance)} meters away`
+        const distanceMiles = place.distance
+          ? (place.distance / 1609.34).toFixed(1)
+          : null;
+        const distance = distanceMiles
+          ? `${distanceMiles} miles away`
           : "distance unknown";
 
         return `${i + 1}. ${place.name}

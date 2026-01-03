@@ -38,13 +38,15 @@ export function ModelSelector({
   onEmbeddingChange,
 }: Props) {
   return (
-    <div className="flex flex-wrap gap-4 p-3 bg-gray-50 border-b text-sm">
+    <div className="flex flex-wrap gap-4 text-sm">
       <div className="flex items-center gap-2">
-        <label className="text-gray-600 font-medium">LLM:</label>
+        <label className="text-gray-500 font-medium text-xs uppercase tracking-wider">
+          Model
+        </label>
         <select
           value={selectedModel}
           onChange={(e) => onModelChange(e.target.value as LLMModelKey)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-yum-500"
+          className="border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-yum-500 focus:border-transparent shadow-sm hover:border-gray-300 transition-colors cursor-pointer"
         >
           {Object.keys(LLM_MODELS).map((key) => (
             <option key={key} value={key}>
@@ -55,13 +57,15 @@ export function ModelSelector({
       </div>
 
       <div className="flex items-center gap-2">
-        <label className="text-gray-600 font-medium">Embeddings:</label>
+        <label className="text-gray-500 font-medium text-xs uppercase tracking-wider">
+          Ranking
+        </label>
         <select
           value={selectedEmbedding}
           onChange={(e) =>
             onEmbeddingChange(e.target.value as EmbeddingProvider)
           }
-          className="border border-gray-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-yum-500"
+          className="border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-yum-500 focus:border-transparent shadow-sm hover:border-gray-300 transition-colors cursor-pointer"
         >
           {Object.values(EMBEDDING_PROVIDERS).map((provider) => (
             <option key={provider} value={provider}>
