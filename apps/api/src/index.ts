@@ -14,13 +14,27 @@ console.log(
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
+// CORS configuration
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://yumly.ai",
+  "https://www.yumly.ai",
+  "https://yumly-web.onrender.com",
+];
+
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === "production"
-        ? "https://yum.ai"
-        : ["http://localhost:5173", "http://localhost:3000"],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.log("Blocked by CORS:", origin);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
