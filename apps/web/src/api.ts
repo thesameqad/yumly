@@ -34,7 +34,9 @@ export async function getChatHistory(
   userId: string,
   limit = 50
 ): Promise<ChatMessage[]> {
-  const response = await fetch(`${API_BASE}/api/history/${userId}?limit=${limit}`);
+  const response = await fetch(
+    `${API_BASE}/api/history/${userId}?limit=${limit}`
+  );
 
   if (!response.ok) throw new Error(`API error: ${response.status}`);
 
