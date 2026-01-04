@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { useLocation as useRouteLocation } from "react-router-dom";
 import type {
@@ -13,7 +13,7 @@ import { ChatMessage } from "../components/ChatMessage";
 import { ChatInput } from "../components/ChatInput";
 import { ModelSelector } from "../components/ModelSelector";
 import { LocationButton } from "../components/LocationButton";
-import { UtensilsCrossed } from "lucide-react";
+import { UtensilsCrossed, FlaskConical, Info } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface DisplayMessage extends ChatMessageType {
@@ -28,6 +28,8 @@ export function ChatPage() {
   const [selectedModel, setSelectedModel] = useState<LLMModelKey>("GPT");
   const [selectedEmbedding, setSelectedEmbedding] =
     useState<EmbeddingProvider>("openai");
+  const [deepResearch, setDeepResearch] = useState(false);
+  const [showDeepResearchTooltip, setShowDeepResearchTooltip] = useState(false);
 
   const {
     location,
@@ -97,6 +99,7 @@ export function ChatPage() {
         location: location || undefined,
         selectedModel,
         selectedEmbedding,
+        deepResearch,
       });
 
       // Store userId for subsequent messages
@@ -127,6 +130,68 @@ export function ChatPage() {
       setLoading(false);
     }
   };
+
+  // Handle "Get More Details" button click
+  const handleGetMoreDetails = useCallback(
+    async (place: Place) => {
+      // Create a query that uses the place name and address for the place_details intent
+      const fullAddress = place.address
+        ? `${place.address}, ${place.city}`
+        : place.city;
+      const detailsQuery = `Tell me more about ${place.name}${
+        fullAddress ? ` at ${fullAddress}` : ""
+      }`;
+
+      // Add user message showing what they clicked
+      const userMsg: DisplayMessage = {
+        id: uuidv4(),
+        role: "user",
+        content: `Tell me more about **${place.name}**`,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+      setLoading(true);
+
+      try {
+        const response = await sendMessage({
+          message: detailsQuery,
+          userId: userId || undefined,
+          location: location || undefined,
+          selectedModel,
+          selectedEmbedding,
+          deepResearch: false, // Always use Yelp AI Chat for details
+        });
+
+        // Store userId for subsequent messages
+        if (!userId) {
+          setUserId(response.userId);
+        }
+
+        // Add assistant response
+        const assistantMsg: DisplayMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: response.message,
+          timestamp: Date.now(),
+          // Don't include places for detail responses to keep it clean
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
+      } catch (error) {
+        console.error("Failed to get more details:", error);
+        const errorMsg: DisplayMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content:
+            "Sorry, I couldn't fetch more details right now. Please try again.",
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [userId, location, selectedModel, selectedEmbedding]
+  );
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -162,19 +227,77 @@ export function ChatPage() {
 
       {/* Model selector */}
       <div className="bg-white border-b px-6 py-2">
-        <ModelSelector
-          selectedModel={selectedModel}
-          selectedEmbedding={selectedEmbedding}
-          onModelChange={setSelectedModel}
-          onEmbeddingChange={setSelectedEmbedding}
-        />
+        <div className="flex items-center justify-between">
+          <ModelSelector
+            selectedModel={selectedModel}
+            selectedEmbedding={selectedEmbedding}
+            onModelChange={setSelectedModel}
+            onEmbeddingChange={setSelectedEmbedding}
+          />
+
+          {/* Deep Research Toggle */}
+          <div className="flex items-center gap-2 relative">
+            <button
+              onClick={() => setDeepResearch(!deepResearch)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                deepResearch
+                  ? "bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-md"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              <FlaskConical className="w-4 h-4" />
+              <span>Deep Research</span>
+            </button>
+
+            {/* Info tooltip button */}
+            <button
+              onClick={() =>
+                setShowDeepResearchTooltip(!showDeepResearchTooltip)
+              }
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <Info className="w-4 h-4" />
+            </button>
+
+            {/* Tooltip */}
+            {showDeepResearchTooltip && (
+              <div className="absolute right-0 top-full mt-2 w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl z-50">
+                <div className="font-semibold mb-1 flex items-center gap-1">
+                  <FlaskConical className="w-3 h-3" />
+                  Deep Research Mode
+                </div>
+                <p className="text-gray-300 leading-relaxed">
+                  Normal search shows you places based on name, rating, and
+                  category.
+                  <span className="text-purple-300 font-medium">
+                    {" "}
+                    Deep Research
+                  </span>{" "}
+                  digs deeper — looking at each place's story, what they're
+                  known for, customer experiences, atmosphere, and amenities to
+                  find the perfect match for what you're looking for.
+                </p>
+                <p className="text-gray-400 mt-2 text-[10px]">
+                  ⚠️ Takes a bit longer but gives more thoughtful
+                  recommendations
+                </p>
+                <div className="absolute -top-1 right-4 w-2 h-2 bg-gray-900 rotate-45"></div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
         <div className="max-w-4xl mx-auto space-y-6">
           {messages.map((msg) => (
-            <ChatMessage key={msg.id} message={msg} places={msg.places} />
+            <ChatMessage
+              key={msg.id}
+              message={msg}
+              places={msg.places}
+              onGetMoreDetails={handleGetMoreDetails}
+            />
           ))}
 
           {loading && (
@@ -205,13 +328,15 @@ export function ChatPage() {
       {/* Input */}
       <div className="p-4 bg-white border-t">
         <div className="max-w-4xl mx-auto w-full">
-          <ChatInput onSend={handleSend} disabled={loading} />
-          <div className="flex justify-center mt-2">
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <ChatInput onSend={handleSend} disabled={loading} />
+            </div>
             <a
               href="https://www.yelp.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity"
+              className="flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity pb-3"
             >
               <span className="text-[10px] text-gray-500 font-medium">
                 Powered by

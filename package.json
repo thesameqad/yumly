@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
+    "build:shared": "yarn workspace @yumly/shared build",
     "lint": "turbo run lint",
     "api:dev": "yarn workspace @yumly/api dev",
     "web:dev": "yarn workspace @yumly/web dev"

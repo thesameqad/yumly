@@ -18,6 +18,8 @@ const PORT = process.env.PORT || 3001;
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:3000",
   "https://yumly.ai",
   "https://www.yumly.ai",
   "https://yumly-web.onrender.com",
@@ -26,8 +28,15 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, etc.)
+      // Allow requests with no origin (mobile apps, curl, Postman, etc.)
       if (!origin) return callback(null, true);
+      // Allow all localhost/127.0.0.1 origins in development
+      if (
+        origin.startsWith("http://localhost:") ||
+        origin.startsWith("http://127.0.0.1:")
+      ) {
+        return callback(null, true);
+      }
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {

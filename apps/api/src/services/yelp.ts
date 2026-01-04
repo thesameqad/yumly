@@ -1,8 +1,10 @@
 import type {
   Place,
   PlaceFilters,
+  PlaceAttributes,
   UserLocation,
   DayHours,
+  SortBy,
 } from "@yumly/shared";
 
 interface YelpBusiness {
@@ -26,6 +28,18 @@ interface YelpBusiness {
     longitude: number;
   };
   is_closed: boolean;
+  // Search endpoint returns business_hours, not hours
+  business_hours?: {
+    open: {
+      day: number;
+      start: string;
+      end: string;
+      is_overnight: boolean;
+    }[];
+    hours_type: string;
+    is_open_now: boolean;
+  }[];
+  // Details endpoint returns hours
   hours?: {
     open: {
       day: number;
@@ -33,10 +47,14 @@ interface YelpBusiness {
       end: string;
       is_overnight: boolean;
     }[];
+    hours_type: string;
     is_open_now: boolean;
   }[];
   image_url?: string;
   url?: string;
+  attributes?: {
+    menu_url?: string;
+  };
 }
 
 interface YelpSearchResponse {
@@ -61,6 +79,8 @@ export class YelpService {
       term?: string;
       categories?: string;
       filters?: PlaceFilters;
+      attributes?: PlaceAttributes;
+      sortBy?: SortBy;
       limit?: number;
       radius?: number;
       locationName?: string; // Search by city/area name instead of coordinates
@@ -68,7 +88,7 @@ export class YelpService {
   ): Promise<Place[]> {
     const params = new URLSearchParams({
       limit: (options.limit || 20).toString(),
-      sort_by: "best_match",
+      sort_by: options.sortBy || "best_match",
     });
 
     // Use location name OR coordinates (location name takes priority if provided)
@@ -103,6 +123,23 @@ export class YelpService {
       params.set("price", options.filters.priceLevel.join(","));
     }
 
+    // Add attribute filters (Yelp uses comma-separated attributes)
+    // Note: dogs_allowed is a premium filter, not available on free tier
+    const yelpAttributes: string[] = [];
+    if (options.attributes?.wheelchairAccessible) {
+      yelpAttributes.push("wheelchair_accessible");
+    }
+    if (options.attributes?.genderNeutralRestrooms) {
+      yelpAttributes.push("gender_neutral_restrooms");
+    }
+    if (options.attributes?.openToAll) {
+      yelpAttributes.push("open_to_all");
+    }
+    // dogs_allowed requires Yelp premium - skip it
+    if (yelpAttributes.length > 0) {
+      params.set("attributes", yelpAttributes.join(","));
+    }
+
     const response = await fetch(
       `${this.baseUrl}/businesses/search?${params}`,
       {
@@ -120,6 +157,8 @@ export class YelpService {
     }
 
     const data: YelpSearchResponse = await response.json();
+
+    // Transform business data (reviews require paid Yelp plan, so we skip)
     return data.businesses.map((b) => this.transformBusiness(b));
   }
 
@@ -145,7 +184,9 @@ export class YelpService {
     category: "restaurants" | "cafes" | "bars",
     cuisine?: string,
     filters?: PlaceFilters,
-    locationName?: string
+    locationName?: string,
+    sortBy?: SortBy,
+    attributes?: PlaceAttributes
   ): Promise<Place[]> {
     const categoryMap = {
       restaurants: "restaurants",
@@ -160,12 +201,17 @@ export class YelpService {
       categories: categoryMap[category],
       filters,
       locationName,
+      sortBy,
+      attributes,
     });
   }
 
   private transformBusiness(business: YelpBusiness): Place {
+    // Use business_hours (search endpoint) or hours (details endpoint)
+    const hoursData = business.business_hours?.[0] || business.hours?.[0];
+
     const hours: DayHours[] =
-      business.hours?.[0]?.open.map((h) => ({
+      hoursData?.open.map((h) => ({
         day: h.day,
         start: h.start,
         end: h.end,
@@ -187,10 +233,11 @@ export class YelpService {
         latitude: business.coordinates.latitude,
         longitude: business.coordinates.longitude,
       },
-      isOpenNow: business.hours?.[0]?.is_open_now,
+      isOpenNow: hoursData?.is_open_now,
       hours,
       imageUrl: business.image_url,
       url: business.url,
+      menuUrl: business.attributes?.menu_url,
     };
   }
 

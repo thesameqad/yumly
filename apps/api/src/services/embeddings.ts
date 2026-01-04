@@ -76,15 +76,60 @@ export class EmbeddingsService {
   ): Promise<RankedPlace[]> {
     if (places.length === 0) return [];
 
-    // Create rich descriptions for each place
-    const placeDescriptions = places.map((place) =>
-      this.createPlaceDescription(place)
-    );
+    // TODO: Enable when we have better data (reviews, descriptions)
+    // For now, skip embedding ranking and just return with default score
+    if (false) {
+      // Create rich descriptions for each place
+      const placeDescriptions = places.map((place) =>
+        this.createPlaceDescription(place)
+      );
+
+      // Get all embeddings
+      const [queryEmbedding, placeEmbeddings] = await Promise.all([
+        this.getEmbedding(query, provider),
+        this.getEmbeddings(placeDescriptions, provider),
+      ]);
+
+      // Calculate similarities and rank
+      const rankedPlaces: RankedPlace[] = places.map((place, i) => ({
+        ...place,
+        similarityScore: this.cosineSimilarity(
+          queryEmbedding,
+          placeEmbeddings[i]
+        ),
+      }));
+
+      // Sort by similarity (highest first)
+      rankedPlaces.sort((a, b) => b.similarityScore - a.similarityScore);
+
+      return rankedPlaces;
+    }
+
+    // Return places with default similarity score (preserve Yelp's ordering)
+    return places.map((place) => ({
+      ...place,
+      similarityScore: 1.0,
+    }));
+  }
+
+  // Rank places using pre-built enriched text descriptions (for Deep Research mode)
+  async rankPlacesWithTexts(
+    query: string,
+    places: Place[],
+    placeTexts: string[],
+    provider: EmbeddingProvider = "openai"
+  ): Promise<RankedPlace[]> {
+    if (places.length === 0) return [];
+    if (places.length !== placeTexts.length) {
+      throw new Error("Places and texts arrays must have same length");
+    }
+
+    console.log("Deep Research: Computing embeddings for ranking...");
 
     // Get all embeddings
     const [queryEmbedding, placeEmbeddings] = await Promise.all([
       this.getEmbedding(query, provider),
-      this.getEmbeddings(placeDescriptions, provider),
+      this.getEmbeddings(placeTexts, provider),
     ]);
 
     // Calculate similarities and rank
@@ -99,17 +144,32 @@ export class EmbeddingsService {
     // Sort by similarity (highest first)
     rankedPlaces.sort((a, b) => b.similarityScore - a.similarityScore);
 
+    console.log(
+      "Deep Research ranking results:",
+      rankedPlaces.map(
+        (p) => `${p.name}: ${(p.similarityScore * 100).toFixed(1)}%`
+      )
+    );
+
     return rankedPlaces;
   }
 
   // Create a rich text description of a place for embedding
+  // Note: Reviews require paid Yelp plan, so we use categories and name
   private createPlaceDescription(place: Place): string {
     const parts = [
       place.name,
-      place.categories.join(", "),
-      place.rating ? `${place.rating} stars` : "",
+      // Categories are key for matching food types
+      `Categories: ${place.categories.join(", ")}`,
+      place.rating ? `Rating: ${place.rating} stars` : "",
       place.priceLevel ? `Price: ${place.priceLevel}` : "",
       place.reviewCount ? `${place.reviewCount} reviews` : "",
+      place.isOpenNow !== undefined
+        ? place.isOpenNow
+          ? "Currently open"
+          : "Currently closed"
+        : "",
+      place.city,
     ].filter(Boolean);
 
     return parts.join(". ");

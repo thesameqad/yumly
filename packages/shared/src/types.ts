@@ -55,8 +55,19 @@ export type IntentType =
   | "search_places"
   | "get_recommendations"
   | "filter_results"
-  | "get_details"
+  | "place_details"
   | "general_chat";
+
+// Sorting options for Yelp search
+export type SortBy = "best_match" | "rating" | "review_count" | "distance";
+
+// Yelp attributes (free tier only)
+export interface PlaceAttributes {
+  wheelchairAccessible?: boolean;
+  genderNeutralRestrooms?: boolean;
+  openToAll?: boolean;
+  dogsAllowed?: boolean;
+}
 
 export interface ParsedIntent {
   intent: IntentType;
@@ -65,8 +76,11 @@ export interface ParsedIntent {
     placeType?: "restaurant" | "cafe" | "bar" | "any";
     dish?: string;
     filters?: PlaceFilters;
+    attributes?: PlaceAttributes;
+    sortBy?: SortBy;
     query?: string;
     location?: string; // Extracted location from query (e.g., "Frisco", "downtown Austin")
+    placeName?: string; // Specific place name for place_details intent
     needsUserLocation?: boolean; // True if query implies "near me" without specifying location
   };
   confidence: number;
@@ -99,6 +113,7 @@ export interface Place {
   hours?: DayHours[];
   imageUrl?: string;
   url?: string;
+  menuUrl?: string; // Link to menu
 }
 
 export interface DayHours {
@@ -115,6 +130,7 @@ export interface ChatRequest {
   location?: UserLocation;
   selectedModel?: LLMModelKey;
   selectedEmbedding?: EmbeddingProvider;
+  deepResearch?: boolean; // Enable deep research mode with enriched data and embeddings
 }
 
 export interface ChatResponse {

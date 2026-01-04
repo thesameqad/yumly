@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { sessionService } from "../services/session.js";
 import { intentRouter } from "../services/intentRouter.js";
 import { yelpService } from "../services/yelp.js";
+import { yelpAiChatService } from "../services/yelpAiChat.js";
 import { embeddingsService } from "../services/embeddings.js";
 import { responseGenerator } from "../services/responseGenerator.js";
 import type {
@@ -20,7 +21,13 @@ const router = Router();
 router.post("/chat", async (req: Request, res: Response) => {
   try {
     const body: ChatRequest = req.body;
-    const { message, location, selectedModel, selectedEmbedding } = body;
+    const {
+      message,
+      location,
+      selectedModel,
+      selectedEmbedding,
+      deepResearch,
+    } = body;
     let { userId } = body;
 
     if (!message) {
@@ -59,6 +66,11 @@ router.post("/chat", async (req: Request, res: Response) => {
     };
     sessionService.addMessage(userId!, userMessage);
 
+    console.log(
+      "Route is started and the User message saved to session:",
+      userMessage
+    );
+
     // Parse intent
     const intent = await intentRouter.parseIntent(
       message,
@@ -68,8 +80,57 @@ router.post("/chat", async (req: Request, res: Response) => {
     let responseText: string;
     let places: ChatResponse["places"] = undefined;
 
-    // Handle based on intent
-    if (intentRouter.isSearchIntent(intent)) {
+    // Handle place_details intent - user asking about a specific place
+    if (intentRouter.isPlaceDetailsIntent(intent)) {
+      const placeName = intent.entities.placeName!;
+      const locationHint = intent.entities.location;
+      // The query field often contains the full address, extract it
+      const queryText = intent.entities.query || "";
+      // Try to extract address from query (e.g., "Owl Bar at 6363 Dallas Pkwy Suite 120, Frisco, TX 75034")
+      const addressMatch = queryText.match(/at\s+([^,]+(?:,\s*[^,]+)*)/i);
+      const addressFromQuery = addressMatch
+        ? addressMatch[1].trim()
+        : undefined;
+
+      console.log(
+        `Place details requested for: ${placeName}`,
+        addressFromQuery
+          ? `at ${addressFromQuery}`
+          : locationHint
+          ? `near ${locationHint}`
+          : ""
+      );
+
+      // Get rich details using Yelp AI Chat - use address from query if available
+      const enrichment = await yelpAiChatService.getPlaceDetails(
+        placeName,
+        addressFromQuery,
+        locationHint
+      );
+
+      if (enrichment) {
+        // Format the enrichment data into a nice response
+        responseText = enrichment.description;
+
+        // Add extra context if available
+        if (enrichment.vibes.length > 0 || enrichment.amenities.length > 0) {
+          responseText += "\n\n";
+          if (enrichment.vibes.length > 0) {
+            responseText += `**Atmosphere:** ${enrichment.vibes.join(", ")}\n`;
+          }
+          if (enrichment.amenities.length > 0) {
+            responseText += `**Amenities:** ${enrichment.amenities.join(", ")}`;
+          }
+        }
+
+        responseText +=
+          "\n\nWould you like me to find similar places nearby, or do you have any other questions about this location?";
+      } else {
+        responseText = `I couldn't find detailed information about "${placeName}". Could you provide more details like the city or address? Or would you like me to search for similar places?`;
+      }
+    }
+    // Handle search intent
+    else if (intentRouter.isSearchIntent(intent)) {
       const userLocation = session.location || location;
       const locationName = intent.entities.location; // Extracted from query (e.g., "Frisco")
       const needsUserLocation = intentRouter.needsLocation(intent);
@@ -81,12 +142,30 @@ router.post("/chat", async (req: Request, res: Response) => {
       } else {
         // Search for places - use location name if provided, otherwise user coordinates
         const searchTerm = yelpService.buildSearchTerm(intent.entities);
+        const sortBy = intent.entities.sortBy || "best_match";
+        const attributes = intent.entities.attributes;
+
+        console.log(
+          "Searching Yelp with term:",
+          searchTerm,
+          "filters:",
+          intent.entities.filters,
+          "sortBy:",
+          sortBy,
+          "attributes:",
+          attributes,
+          "location:",
+          locationName
+        );
+
         const searchResults = await yelpService.searchPlaces(
           locationName ? null : userLocation ?? null,
           {
             term: searchTerm,
             filters: intent.entities.filters,
             locationName: locationName || undefined,
+            sortBy,
+            attributes,
           }
         );
 
@@ -96,33 +175,96 @@ router.post("/chat", async (req: Request, res: Response) => {
             session.selectedModel
           );
         } else {
-          // Rank by embeddings
-          const rankedPlaces = await embeddingsService.rankPlaces(
-            intent.entities.query || message,
-            searchResults,
-            session.selectedEmbedding
+          console.log(
+            `Found ${searchResults.length} places from Yelp`,
+            searchResults
           );
 
-          // Get chat history for context
-          const history = sessionService.getChatHistory(userId!, 6);
-          const chatHistory = history
-            .filter((m) => m.role !== "system")
-            .map((m) => ({
-              role: m.role as "user" | "assistant",
-              content: m.content,
-            }));
+          let rankedPlaces;
 
-          // Generate response
-          responseText = await responseGenerator.generateResponse(
-            message,
-            rankedPlaces,
-            session.selectedModel,
-            {
-              chatHistory,
-              dish: intent.entities.dish,
-              cuisine: intent.entities.cuisine,
+          // Deep Research Mode: Enrich with Yelp AI Chat + use embeddings for ranking
+          if (deepResearch) {
+            console.log("🔬 Deep Research Mode enabled - enriching places...");
+
+            // Enrich top 5 places with detailed data
+            const enrichments = await yelpAiChatService.enrichPlaces(
+              searchResults,
+              5
+            );
+
+            // Build rich text descriptions for embedding comparison
+            const enrichedTexts: string[] = [];
+            for (const place of searchResults.slice(0, 5)) {
+              const enrichment = enrichments.get(place.id);
+              if (enrichment) {
+                enrichedTexts.push(
+                  yelpAiChatService.buildEmbeddingText(place, enrichment)
+                );
+              } else {
+                enrichedTexts.push(
+                  `${place.name}. ${place.categories.join(", ")}`
+                );
+              }
             }
-          );
+
+            // Rank by embeddings using enriched text
+            rankedPlaces = await embeddingsService.rankPlacesWithTexts(
+              intent.entities.query || message,
+              searchResults.slice(0, 5),
+              enrichedTexts,
+              session.selectedEmbedding
+            );
+
+            console.log(
+              `Deep Research: Ranked ${rankedPlaces.length} places with enriched embeddings`
+            );
+
+            // Generate detailed deep research response
+            responseText = await responseGenerator.generateDeepResearchResponse(
+              message,
+              rankedPlaces,
+              enrichments,
+              session.selectedModel,
+              {
+                dish: intent.entities.dish,
+                cuisine: intent.entities.cuisine,
+                sortBy: intent.entities.sortBy,
+              }
+            );
+          } else {
+            // Normal mode: Use Yelp's built-in ranking (embeddings disabled)
+            rankedPlaces = await embeddingsService.rankPlaces(
+              intent.entities.query || message,
+              searchResults,
+              session.selectedEmbedding
+            );
+            console.log(
+              `Ranked ${rankedPlaces.length} places by embeddings`,
+              rankedPlaces
+            );
+
+            // Get chat history for context
+            const history = sessionService.getChatHistory(userId!, 6);
+            const chatHistory = history
+              .filter((m) => m.role !== "system")
+              .map((m) => ({
+                role: m.role as "user" | "assistant",
+                content: m.content,
+              }));
+
+            // Generate response
+            responseText = await responseGenerator.generateResponse(
+              message,
+              rankedPlaces,
+              session.selectedModel,
+              {
+                chatHistory,
+                dish: intent.entities.dish,
+                cuisine: intent.entities.cuisine,
+                sortBy: intent.entities.sortBy,
+              }
+            );
+          }
 
           places = rankedPlaces.slice(0, 5);
         }
@@ -152,6 +294,13 @@ router.post("/chat", async (req: Request, res: Response) => {
       timestamp: Date.now(),
     };
     sessionService.addMessage(userId!, assistantMessage);
+
+    console.log(
+      "Assistant message generated and saved to session, Final response with places returns to the frontend:",
+      responseText,
+      places,
+      intent
+    );
 
     const response: ChatResponse = {
       message: responseText,
